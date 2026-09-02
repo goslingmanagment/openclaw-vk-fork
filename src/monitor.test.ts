@@ -51,6 +51,7 @@ const mockPollingTransportStart = vi.hoisted(() => vi.fn().mockResolvedValue(und
 const mockPollingTransportStop = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockPollingTransportFetch = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockPollingTransportSubscribe = vi.hoisted(() => vi.fn());
+const mockPollingTransportInstances = vi.hoisted(() => [] as Array<{ fetchUpdates: () => Promise<void> }>);
 const mockFirstLongPollFetch = vi.hoisted(() => vi.fn());
 const mockUpdatesOn = vi.hoisted(() => vi.fn());
 const mockHandleWebhookUpdate = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -78,6 +79,7 @@ vi.mock("vk-io", () => {
 
     constructor(options: unknown) {
       mockPollingTransportOptions(options);
+      mockPollingTransportInstances.push(this);
     }
 
     async start() {
@@ -207,6 +209,7 @@ beforeEach(() => {
   mockPollingTransportStop.mockReset().mockResolvedValue(undefined);
   mockPollingTransportFetch.mockReset().mockResolvedValue(undefined);
   mockPollingTransportSubscribe.mockReset();
+  mockPollingTransportInstances.length = 0;
   mockFirstLongPollFetch.mockReset().mockResolvedValue({
     ok: true,
     json: async () => ({ ts: "next-ts", updates: [] }),
@@ -312,7 +315,6 @@ describe("gateway lifecycle status", () => {
       connected: true,
       lifecycle: "ready",
       lastConnectedAt: expect.any(Number),
-      lastEventAt: expect.any(Number),
       lastTransportActivityAt: expect.any(Number),
       lastError: null,
       terminalDisconnect: undefined,
@@ -320,7 +322,7 @@ describe("gateway lifecycle status", () => {
     });
 
     const ready = setStatus.mock.calls[0][0];
-    expect(ready.lastEventAt).toBe(ready.lastConnectedAt);
+    expect(ready.lastEventAt).toBeUndefined();
     expect(ready.lastTransportActivityAt).toBe(ready.lastConnectedAt);
 
     const readinessUrl = mockFirstLongPollFetch.mock.calls[0][0] as URL;
@@ -330,6 +332,24 @@ describe("gateway lifecycle status", () => {
     expect(readinessUrl.searchParams.get("ts")).toBe("initial-ts");
     expect(readinessUrl.searchParams.get("wait")).toBe("1");
     expect(normalPollUrl.searchParams.get("wait")).toBe("25");
+  });
+
+  it("refreshes transport activity after successful empty polls beyond the stale threshold", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-02T09:00:00Z"));
+    const setStatus = vi.fn();
+
+    activeMonitor = startMonitor({ setStatus });
+    await flush();
+    const connectedAt = setStatus.mock.calls[0][0].lastConnectedAt as number;
+
+    vi.setSystemTime(connectedAt + 31 * 60 * 1000);
+    await mockPollingTransportInstances[0].fetchUpdates();
+
+    expect(setStatus).toHaveBeenLastCalledWith({
+      lastTransportActivityAt: connectedAt + 31 * 60 * 1000,
+    });
+    vi.useRealTimers();
   });
 
   it("propagates startup failure without publishing a false-ready snapshot", async () => {
@@ -410,7 +430,10 @@ describe("gateway lifecycle status", () => {
     activeMonitor = startMonitor({ setStatus });
     await flush();
 
-    expect(setStatus).toHaveBeenCalledOnce();
+    expect(setStatus).toHaveBeenCalledTimes(2);
+    expect(setStatus).toHaveBeenLastCalledWith({
+      lastTransportActivityAt: expect.any(Number),
+    });
     expect(mockFirstLongPollFetch).toHaveBeenCalledOnce();
     expect(mockPollingTransportFetch).toHaveBeenCalledTimes(2);
   });

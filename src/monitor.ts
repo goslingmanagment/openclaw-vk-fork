@@ -29,9 +29,14 @@ class ReadinessPollingTransport extends PollingTransport {
   private readonly firstSuccessfulPoll: Promise<void>;
   private resolveFirstSuccessfulPoll!: () => void;
   private rejectFirstSuccessfulPoll!: (error: Error) => void;
+  private readonly onSuccessfulPoll: () => void;
 
-  constructor(options: ConstructorParameters<typeof PollingTransport>[0]) {
+  constructor(
+    options: ConstructorParameters<typeof PollingTransport>[0],
+    onSuccessfulPoll: () => void,
+  ) {
     super(options);
+    this.onSuccessfulPoll = onSuccessfulPoll;
     this.firstSuccessfulPoll = new Promise<void>((resolve, reject) => {
       this.resolveFirstSuccessfulPoll = resolve;
       this.rejectFirstSuccessfulPoll = reject;
@@ -127,12 +132,12 @@ class ReadinessPollingTransport extends PollingTransport {
   }
 
   override async fetchUpdates(): Promise<void> {
-    const activeFetch = this.readinessSettled
-      ? super.fetchUpdates()
-      : this.fetchReadinessPoll();
+    const isReadinessPoll = !this.readinessSettled;
+    const activeFetch = isReadinessPoll ? this.fetchReadinessPoll() : super.fetchUpdates();
     this.activeFetch = activeFetch;
     try {
       await activeFetch;
+      this.onSuccessfulPoll();
     } finally {
       if (this.activeFetch === activeFetch) {
         this.activeFetch = undefined;
@@ -240,6 +245,7 @@ export async function monitorVkProvider(opts: VkMonitorOptions): Promise<void> {
   let updatesStarted = false;
   let stopPromise: Promise<void> | undefined;
   let pollingTransport: ReadinessPollingTransport | undefined;
+  let publishPollActivity = false;
 
   const stopUpdates = async (): Promise<void> => {
     stopRequested = true;
@@ -304,6 +310,7 @@ export async function monitorVkProvider(opts: VkMonitorOptions): Promise<void> {
       direction: "inbound",
       at: message.timestamp,
     });
+    opts.setStatus?.({ lastEventAt: Date.now() });
 
     try {
       const currentCfg = readVkRuntimeConfig(core);
@@ -334,13 +341,20 @@ export async function monitorVkProvider(opts: VkMonitorOptions): Promise<void> {
       primeVkGroupId(opts.token, botsLp.groupId);
     }
     const useBotsLongPoll = botsLp.ok && botsLp.groupId !== undefined;
-    pollingTransport = new ReadinessPollingTransport({
-      api: vk.api,
-      agent: globalAgent,
-      pollingWait: 3_000,
-      pollingRetryLimit: 3,
-      ...(useBotsLongPoll ? { pollingGroupId: botsLp.groupId } : {}),
-    });
+    pollingTransport = new ReadinessPollingTransport(
+      {
+        api: vk.api,
+        agent: globalAgent,
+        pollingWait: 3_000,
+        pollingRetryLimit: 3,
+        ...(useBotsLongPoll ? { pollingGroupId: botsLp.groupId } : {}),
+      },
+      () => {
+        if (publishPollActivity) {
+          opts.setStatus?.({ lastTransportActivityAt: Date.now() });
+        }
+      },
+    );
     pollingTransport.subscribe((update) =>
       useBotsLongPoll
         ? vk.updates.handleWebhookUpdate(update as unknown as Record<string, unknown>)
@@ -380,11 +394,11 @@ export async function monitorVkProvider(opts: VkMonitorOptions): Promise<void> {
     }
 
     const connectedAt = Date.now();
+    publishPollActivity = true;
     opts.setStatus?.(
       channelReadyPatch({
         mode: "longpoll",
         lastConnectedAt: connectedAt,
-        lastEventAt: connectedAt,
         lastTransportActivityAt: connectedAt,
       }),
     );

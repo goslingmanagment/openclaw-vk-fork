@@ -55,7 +55,7 @@ openclaw plugins update vk
 openclaw plugins update --all
 
 # Установить конкретную версию
-openclaw plugins install @openclaw-vk/vk@2026.8.31 --force --accept-capabilities
+openclaw plugins install @openclaw-vk/vk@2026.9.2 --force --accept-capabilities
 openclaw gateway restart
 openclaw channels status --json --probe
 ```

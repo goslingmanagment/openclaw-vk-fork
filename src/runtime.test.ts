@@ -19,20 +19,13 @@ describe("readVkRuntimeConfig", () => {
     expect(current).toHaveBeenCalledOnce();
   });
 
-  it("falls back to the legacy OpenClaw config API", () => {
-    const expected = { channels: { vk: { enabled: true } } };
-    const loadConfig = vi.fn().mockReturnValue(expected);
+  it("fails clearly instead of using the removed legacy config API", () => {
+    const loadConfig = vi.fn();
     const runtime = { config: { loadConfig } } as unknown as PluginRuntime;
 
-    expect(readVkRuntimeConfig(runtime)).toBe(expected);
-    expect(loadConfig).toHaveBeenCalledOnce();
-  });
-
-  it("fails clearly when no readable config API exists", () => {
-    const runtime = { config: {} } as unknown as PluginRuntime;
-
     expect(() => readVkRuntimeConfig(runtime)).toThrow(
-      "OpenClaw runtime does not expose a readable config API",
+      "OpenClaw runtime does not expose config.current()",
     );
+    expect(loadConfig).not.toHaveBeenCalled();
   });
 });
