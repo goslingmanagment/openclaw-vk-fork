@@ -164,9 +164,10 @@ export const vkPlugin: ChannelPlugin<ResolvedVkAccount, VkProbe> = {
     normalizeAllowEntry: (entry) => {
       return entry.replace(/^vk:(?:user:)?/i, "");
     },
-    notifyApproval: async ({ cfg, id }) => {
+    notifyApproval: async ({ cfg, id, accountId }) => {
       await sendMessageVk(id, "OpenClaw: your access has been approved.", {
         cfg,
+        accountId,
       });
     },
   },

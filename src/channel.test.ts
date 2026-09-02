@@ -263,13 +263,22 @@ describe("pairing", () => {
     expect(vkPlugin.pairing!.normalizeAllowEntry("111")).toBe("111");
   });
 
-  it("notifyApproval sends message via sendMessageVk", async () => {
-    await vkPlugin.pairing!.notifyApproval({ cfg: {}, id: "42" });
+  it("notifyApproval preserves the approved named account for delivery", async () => {
+    const cfg = {
+      channels: {
+        vk: {
+          token: "default-token",
+          accounts: { sales: { token: "sales-token" } },
+        },
+      },
+    };
+
+    await vkPlugin.pairing!.notifyApproval({ cfg, id: "42", accountId: "sales" });
 
     expect(mockSendMessageVk).toHaveBeenCalledWith(
       "42",
-      expect.stringContaining("approved"),
-      expect.objectContaining({ cfg: {} }),
+      "OpenClaw: your access has been approved.",
+      { cfg, accountId: "sales" },
     );
   });
 
