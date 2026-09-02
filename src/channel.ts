@@ -7,6 +7,7 @@ import {
   buildComputedAccountStatusSnapshot,
   buildTokenChannelStatusSummary,
 } from "openclaw/plugin-sdk/channel-status";
+import { createAccountStatusSink } from "openclaw/plugin-sdk/channel-outbound";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
 import type { ChannelStatusIssue } from "openclaw/plugin-sdk/channel-contract";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
@@ -407,6 +408,10 @@ export const vkPlugin: ChannelPlugin<ResolvedVkAccount, VkProbe> = {
   gateway: {
     startAccount: async (ctx) => {
       const account = ctx.account;
+      const setStatus = createAccountStatusSink({
+        accountId: account.accountId,
+        setStatus: ctx.setStatus,
+      });
       const token = account.token.trim();
       if (!token) {
         throw new Error(
@@ -435,6 +440,7 @@ export const vkPlugin: ChannelPlugin<ResolvedVkAccount, VkProbe> = {
         config: ctx.cfg as CoreConfig,
         runtime: ctx.runtime,
         abortSignal: ctx.abortSignal,
+        setStatus,
       });
 
       return monitor;

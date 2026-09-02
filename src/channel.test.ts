@@ -35,6 +35,12 @@ vi.mock("openclaw/plugin-sdk/channel-status", () => ({
   buildTokenChannelStatusSummary: vi.fn().mockReturnValue({}),
 }));
 
+vi.mock("openclaw/plugin-sdk/channel-outbound", () => ({
+  createAccountStatusSink:
+    ({ accountId, setStatus }: { accountId: string; setStatus: (next: unknown) => void }) =>
+    (patch: Record<string, unknown>) => setStatus({ accountId, ...patch }),
+}));
+
 vi.mock("openclaw/plugin-sdk/account-id", () => ({
   DEFAULT_ACCOUNT_ID: "default",
 }));
@@ -1193,6 +1199,7 @@ describe("gateway", () => {
 
   describe("startAccount", () => {
     it("calls probeVkBot and monitorVkProvider", async () => {
+      const setStatus = vi.fn();
       const ctx = {
         account: {
           accountId: "default",
@@ -1201,6 +1208,7 @@ describe("gateway", () => {
         cfg: { channels: { vk: { token: "test-token" } } },
         runtime: {},
         abortSignal: undefined,
+        setStatus,
         log: { info: vi.fn(), debug: vi.fn() },
       };
 
@@ -1211,8 +1219,17 @@ describe("gateway", () => {
         expect.objectContaining({
           token: "test-token",
           accountId: "default",
+          setStatus: expect.any(Function),
         }),
       );
+
+      const monitorStatusSink = mockMonitorVkProvider.mock.calls[0][0].setStatus;
+      monitorStatusSink({ lifecycle: "ready", connected: true });
+      expect(setStatus).toHaveBeenCalledWith({
+        accountId: "default",
+        lifecycle: "ready",
+        connected: true,
+      });
     });
 
     it("throws when token is empty", async () => {
