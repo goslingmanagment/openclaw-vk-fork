@@ -490,7 +490,10 @@ export const vkPlugin: ChannelPlugin<ResolvedVkAccount, VkProbe> = {
             delete nextCfg.channels;
           }
         }
-        await getVkRuntime().config.writeConfigFile(nextCfg);
+        await getVkRuntime().config.replaceConfigFile({
+          nextConfig: nextCfg,
+          afterWrite: { mode: "auto" },
+        });
       }
 
       const resolved = resolveVkAccount({

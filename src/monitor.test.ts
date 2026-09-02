@@ -704,7 +704,7 @@ describe("message_new handler", () => {
     await flush();
     await getMessageHandler()(makeCtx());
 
-    expect(vi.mocked(core.config.loadConfig)).toHaveBeenCalled();
+    expect(vi.mocked(core.config.current)).toHaveBeenCalled();
   });
 
   it("handles messages without attachments or replyMessage", async () => {

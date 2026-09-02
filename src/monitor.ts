@@ -9,7 +9,7 @@ import {
   extractVkInboundAttachments,
   resolveVkInboundReplyContext,
 } from "./media.js";
-import { getVkRuntime } from "./runtime.js";
+import { getVkRuntime, readVkRuntimeConfig } from "./runtime.js";
 import { primeVkGroupId } from "./send.js";
 import type { CoreConfig, VkInboundMessage } from "./types.js";
 
@@ -306,7 +306,7 @@ export async function monitorVkProvider(opts: VkMonitorOptions): Promise<void> {
     });
 
     try {
-      const currentCfg = core.config.loadConfig() as CoreConfig;
+      const currentCfg = readVkRuntimeConfig(core);
       const currentAccount = resolveVkAccount({
         cfg: currentCfg,
         accountId: account.accountId,
